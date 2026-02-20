@@ -6,7 +6,7 @@
 #include <cryptopp/nbtheory.h>
 #include <fstream>
 
-// g++ lab01.cpp -o lab01 -std=c++17 -lcryptopp
+// g++ lab01.cpp -o lab01.out -std=c++17 -lcryptopp
 using namespace std;
 using bigint = CryptoPP::Integer;
 using point = tuple<bigint, bigint, bigint>;
