@@ -1,0 +1,10 @@
+services:
+  backend:
+    build:
+      context: ./backend       # Dockerfile containing the C++ API
+    container_name: crypto-api
+    ports:
+      - "18080:18080"          # Map port (host-container)
+    restart: unless-stopped    # Automatically restart
+
+# docker-compose up --build
