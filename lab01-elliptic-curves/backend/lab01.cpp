@@ -1,23 +1,31 @@
-#include <bits/stdc++.h>
+#include "crow_all.h"
 #include <cryptopp/des.h>
 #include <cryptopp/osrng.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/integer.h>
 #include <cryptopp/nbtheory.h>
 #include <fstream>
+#include <vector>
+#include <iostream>
+#include <map>
 
-// g++ lab01.cpp -o lab01.out -std=c++17 -lcryptopp
+// g++ lab01.cpp -o lab01 -std=c++17 -pthread -lcryptopp -O3
 using namespace std;
 using bigint = CryptoPP::Integer;
 using point = tuple<bigint, bigint, bigint>;
 using ll = long long;
 const point INF = {0, 1, 0};
+const int LIMIT = 1e6;
 
 // Overload operators
-string operator+(string a, bigint b) {
-    return a + CryptoPP::IntToString(b);
+string to_string(const bigint &a) { return CryptoPP::IntToString(a); }
+string operator+(const string &a, const bigint &b) { return a + to_string(b); }
+string to_string(const point &a) { 
+    return "{" + get<0>(a) + ", " + 
+                 get<1>(a) + ", " +
+                 get<2>(a) + "}";
 }
-ostream& operator<<(ostream& os, const point& a) {
+ostream& operator<<(ostream &os, const point &a) {
     os << "{" 
        << get<0>(a) << ", " 
        << get<1>(a) << ", " 
@@ -51,61 +59,24 @@ string formatEC(bigint a, bigint b, bigint p) {
     return y2;
 }
 
-ll validEllipticCurves(bigint p) {
-    string path = "valid_curves.txt";
-    ofstream file(path);
-    bool f = 0;
-    ll cnt = 0;
+bigint add(bigint x, bigint p) {
+    return (x % p + p) % p;
+}
 
-    if(file.is_open()) f = 1;
-    else {
-        cout << "Failed to open file. Continue without saving!" << endl;
-    }
+vector<string> getValidCurves(bigint p) {
+    vector<string> curves;
     for(bigint a=0; a<p; a++) {
         for(bigint b=0; b<p; b++) {
             if(checkDiscriminant(a, b, p)) {
-                string curve = formatEC(a, b, p);
-                if(f) file << curve << endl;
-                cnt++;
+                if(curves.size() > 1e8) break;
+                    curves.push_back(formatEC(a, b, p));
             }
         }
     }
-    if(f) file.close();
-    return cnt;
+    return curves;
 }
 
-ll validEllipticCurvesRandomPrime(int bits) {
-    string path = "valid_curves_random.txt";
-    ofstream file(path);
-    ll cnt = 0;
-    bool f = 0;
-    bigint p = getPrime(bits);
-
-    cout << "Using p: " << p << endl;
-    if(file.is_open()) f = 1;
-    else {
-        cout << "Failed to open file. Continue without saving!" << endl;
-    }
-    for(bigint a=0; a<p; a++) {
-        for(bigint b=0; b<p; b++) {
-            if(checkDiscriminant(a, b, p)) {
-                string curve = formatEC(a, b, p);
-                if(f) file << curve << endl;
-                cnt++;
-            }
-        }
-    }
-    if(f) file.close();
-    return cnt;
-}
-
-array<bigint, 2> hassesTheorem(bigint p) {
-    bigint sr = (4*p).SquareRoot();   // |_2*√p_| => |√4*p_|
-    cout << sr << endl;
-    return {p + 1 - sr, p + 1 + sr};
-}
-
-ll rationalPoints(bigint a, bigint b, bigint p) {
+vector<point> getRationalPoints(bigint a, bigint b, bigint p) {
     // First compute Quadratic Residues (QR)
     // and map valid solutions
     map<bigint, bigint> sr;
@@ -116,7 +87,7 @@ ll rationalPoints(bigint a, bigint b, bigint p) {
     }
 
     // For every value of x, evaluate the EC
-    vector<array<bigint, 3>> points;
+    vector<point> points;
     points.push_back({0, 1, 0});
     for(bigint x=0; x<p; x++) {
         bigint r = evaluateEC(a, b, p, x);
@@ -126,19 +97,15 @@ ll rationalPoints(bigint a, bigint b, bigint p) {
             if(y1 != y2) points.push_back({x, y2, 1});
         }   
     }
+
+    // Sort and get rid of duplicates
     sort(points.begin(), points.end());
     points.resize(unique(points.begin(), points.end()) - points.begin());
-    for(auto &[x, y, z] : points){
-        cout << "(" << x << ", " << y <<", " << z << ")" << endl;
-    }
-    return points.size();
+
+    return points;
 }
 
-bigint add(bigint x, bigint p) {
-    return (x % p + p) % p;
-}
-
-point addPoints(point p1,  point q1, bigint p) {
+point getAddPoints(point p1,  point q1, bigint p) {
     if(p1 == INF) return q1;
     if(q1 == INF) return p1;
     auto &[x1, y1, z1] = p1;
@@ -153,7 +120,7 @@ point addPoints(point p1,  point q1, bigint p) {
     return {x3, y3, 1};
 }
 
-point doublePoint(point p1, bigint a, bigint p) {
+point getDoublePoint(point p1, bigint a, bigint p) {
     if(p1 == INF) return INF;
     auto &[x, y, z] = p1;
     if(!y) return INF;
@@ -163,113 +130,205 @@ point doublePoint(point p1, bigint a, bigint p) {
     return {x3, y3, 1};
 }
 
-void count() {
-    bigint p;
-    cout << "Enter a prime number: ";
-    cin >> p;
-    auto [l, r] = hassesTheorem(p);
-    cout << "[" << l << ", " << r << "]" << endl;
+pair<bigint, bigint> getHassesTheorem(bigint p) {
+    bigint sr = (4*p).SquareRoot();   // |_2*√p_| => |√4*p_|
+    return {p + 1 - sr, p + 1 + sr};
 }
 
-void menu() {
-    cout << "* * * Lab01 - Elliptic Curves * * *" << endl;
-    cout << "[1] Find valid curves." << endl;
-    cout << "[2] Finv valid curves for a random prime." << endl;
-    cout << "[3] Find rational points." << endl;
-    cout << "[4] Add two points." << endl;
-    cout << "[5] Double a point." << endl;
-    cout << "[0] Exit." << endl;
-    cout << "Select an option: ";
+// Parse functions
+bigint parse_bigint(const crow::json::rvalue &body, const string &key) {
+    string value = body[key].s();
+    return bigint(value.c_str());
+}
+point parse_point(const crow::json::rvalue &body, const string &key) {
+    crow::json::rvalue arr = body[key];
+    // if (!arr || arr.size() != 3)
+    //     throw std::runtime_error("Invalid point");
+
+    bigint x = parse_bigint(arr, "x");
+    bigint y = parse_bigint(arr, "y");
+    bigint z = parse_bigint(arr, "z");
+
+    return {x, y, z};
+}
+
+// Send response as Headers CORS
+crow::response response(crow::json::wvalue res) {
+    auto response = crow::response(200, res);
+    response.add_header("Access-Control-Allow-Origin", "*");
+    response.add_header("Access-Control-Allow-Headers", "Content-Type");
+    return response;
+}
+
+// Convert to JSON
+crow::json::wvalue serialize(const string &s) { return s; }
+crow::json::wvalue serialize(const point &p) {
+    // return to_string(p);
+    crow::json::wvalue obj;
+    obj["x"] = to_string(get<0>(p));
+    obj["y"] = to_string(get<1>(p));
+    obj["z"] = to_string(get<2>(p));
+    return obj;
+}
+crow::json::wvalue serialize(const pair<bigint, bigint> &p) {
+    crow::json::wvalue obj;
+    obj["l"] = to_string(p.first);
+    obj["r"] = to_string(p.second);
+    return obj;
+}
+// Convert vector to JSON list
+template <typename T>
+crow::json::wvalue vector_to_json(const vector<T> &values) {
+    crow::json::wvalue obj;
+    for(int i=0; i<values.size(); i++) {
+        obj[i] = serialize(values[i]);
+    }
+    return obj;
 }
 
 int main() {
-    ios::sync_with_stdio(0);
-    int opc, bits;
-    ll res;
-    bool f = true;
-    bigint a, b, p;
-    point p1, q1;
-    auto &[x1, y1, z1] = p1;
-    auto &[x2, y2, z2] = q1;
+    crow::SimpleApp app;
 
-    while(f) {
-        menu();
-        cin >> opc;
-        cout << endl;
+    CROW_ROUTE(app, "/")
+    ([](){
+        return "Server running!";
+    });
 
-        switch(opc) {
-            case 1:
-                cin >> p;
-                res = validEllipticCurves(p);
-                cout << "\nfound " << res << " non-singular curves!" << endl;
-                break;
+    CROW_ROUTE(app, "/api/valid_curves").methods(crow::HTTPMethod::POST)
+    ([](const crow::request &req) {
+        // Parse JSON input
+        std::cout << "CROW RECIBIÓ ESTO: [" << req.body << "]" << std::endl;
+        auto body = crow::json::load(req.body);
+        bool valid = body.has("p");
+        if(!body || !valid) return crow::response(400, "Invalid JSON");
 
-            case 2:
-                cout << "Enter number of bits: ";
-                cin >> bits;
-                while(bits < 3) {
-                    cout << "Please, enter a number greater than 2!: ";
-                    cin >> bits;
-                }
-                res = validEllipticCurvesRandomPrime(bits);
-                cout << "\nfound " << res << " non-singular curves!" << endl;
-                break;
+        // Extract prime number as string
+        bigint p = parse_bigint(body, "p");
 
-            case 3:
-                cout << "Enter value of a: ";
-                cin >> a;
-                
-                cout << "Enter value of b: ";
-                cin >> b;
-                cout << "Enter a prime number: ";
-                cin >> p;
-                cout << rationalPoints(a, b, p) << endl;
-                break;
+        vector<string> curves = getValidCurves(p);
 
-            case 4:
-                cout << "Enter Point P1" << endl;
-                cout << "Enter value of x1: ";
-                cin >> x1;
-                cout << "Enter value of y1: ";
-                cin >> y1;
-                cout << "Enter value of z1: ";
-                cin >> z1;
+        // Pack response as JSON
+        crow::json::wvalue res;
+        res["count"] = curves.size();
+        res["curves"] = vector_to_json(curves);
+        
+        return response(res);
+    });
 
-                cout << "Enter Point Q1" << endl;
-                cout << "Enter value of x2: ";
-                cin >> x2;
-                cout << "Enter value of y2: ";
-                cin >> y2;
-                cout << "Enter value of z2: ";
-                cin >> z2;
+    CROW_ROUTE(app, "/api/valid_random").methods(crow::HTTPMethod::POST)
+    ([](const crow::request &req) {
+        // Parse JSON input
+        auto body = crow::json::load(req.body);
+        bool valid = body.has("bits");
+        if(!body || !valid) return crow::response(400, "Invalid JSON");
 
-                cout << "Enter a prime number: ";
-                cin >> p;
+        int bits = body["bits"].i();
+        if(bits < 2) return crow::response(400, "Number of bits must be greater than 2");
 
-                cout << addPoints(p1, q1, p);
-                break;
-            
-            case 5:
-                cout << "Enter Point P1" << endl;
-                cout << "Enter value of x: ";
-                cin >> x1;
-                cout << "Enter value of y: ";
-                cin >> y1;
-                cout << "Enter value of a: ";
-                cin >> a;
-                cout << "Enter a prime number: ";
-                cin >> p;
-                cout << doublePoint(p1, a, p) << endl;
-                break;
+        bigint p = getPrime(bits);
+        vector<string> curves = getValidCurves(p);
 
-            case 0:
-                f = false;
-                break;
-            default:
-                cout << "Ingresa una opción válida" << endl;
-        }
-    }
+        // Pack response as JSON
+        crow::json::wvalue res;
+        res["count"] = curves.size();
+        res["prime"] = to_string(p); 
+        res["curves"] = vector_to_json(curves);
 
-    return 0;
+        return response(res);
+    });
+    
+    
+    CROW_ROUTE(app, "/api/rational_points").methods(crow::HTTPMethod::POST)
+    ([](const crow::request &req) {
+        // Parse JSON input
+        auto body = crow::json::load(req.body);
+        bool valid = body.has("a") & body.has("b") & body.has("p");
+        if(!body || !valid) return crow::response(400, "Invalid JSON");
+
+        bigint a = parse_bigint(body, "a");
+        bigint b = parse_bigint(body, "b");
+        bigint p = parse_bigint(body, "p");
+
+        vector<point> points = getRationalPoints(a, b, p);
+        
+        // Pack response as JSON
+        crow::json::wvalue res;
+        res["count"] = points.size();
+        res["points"] = vector_to_json(points);
+        
+        return response(res);
+    });
+    
+    CROW_ROUTE(app, "/api/add_points").methods(crow::HTTPMethod::POST)
+    ([](const crow::request &req) {
+         // Parse JSON input
+        auto body = crow::json::load(req.body);
+        bool valid = body.has("p1") & body.has("q1") & body.has("p");
+        if(!body || !valid) return crow::response(400, "Invalid JSON");
+
+        point p1 = parse_point(body, "p1");
+        point q1 = parse_point(body, "q1");
+        bigint p = parse_bigint(body, "p");
+
+        point r1 = getAddPoints(p1, q1, p);
+
+        // Pack response as JSON
+        crow::json::wvalue res;
+        res["point"] = serialize(r1);
+
+        return response(res);
+    });
+
+    CROW_ROUTE(app, "/api/double_point").methods(crow::HTTPMethod::POST)
+    ([](const crow::request &req) {
+         // Parse JSON input
+        auto body = crow::json::load(req.body);
+        bool valid = body.has("p1") & body.has("a") & body.has("p");
+        if(!body || !valid) return crow::response(400, "Invalid JSON");
+
+        // Parse input
+        point p1 = parse_point(body, "p1");
+        bigint a = parse_bigint(body, "a");
+        bigint p = parse_bigint(body, "p");
+
+        point p2 = getDoublePoint(p1, a, p);
+
+        // Pack response as JSON
+        crow::json::wvalue res;
+        res["point"] = serialize(p2); 
+
+        return response(res);
+    });
+
+    CROW_ROUTE(app, "/api/hasse").methods(crow::HTTPMethod::POST)
+    ([](const crow::request &req) {
+         // Parse JSON input
+        auto body = crow::json::load(req.body);
+        bool valid = body.has("p");
+        if(!body || !valid) return crow::response(400, "Invalid JSON");
+
+        // Parse input
+        bigint p = parse_bigint(body, "p");
+
+        pair<bigint, bigint> lr = getHassesTheorem(p);
+
+        // Pack response as JSON
+        crow::json::wvalue res;
+        res["bound"] = serialize(lr);
+
+        return response(res);
+    });
+
+    // app.port(18080).multithreaded().run();
+    app.port(18080).concurrency(4).run();
 }
 
+/*
+API test
+curl -X POST http://localhost:18080/api/valid_curves -H "Content-Type: application/json" -d '{"p": "3"}'
+curl -X POST http://localhost:18080/api/valid_random -H "Content-Type: application/json" -d '{"bits": "3"}'
+curl -X POST http://localhost:18080/api/rational_points -H "Content-Type: application/json" -d '{"a": "3", "b": "1", "p": "7"}'
+curl -X POST http://localhost:18080/api/add_points -H "Content-Type: application/json" -d '{"p1": {"x": "1", "y": "2", "z": "1"}, "q1": {"x": "3","y": "4","z": "1"}, "p":"7"}'
+curl -X POST http://localhost:18080/api/double_point -H "Content-Type: application/json" -d '{"p1": {"x": "1", "y": "2", "z": "1"}, "a": "2", "p":"7"}'
+curl -X POST http://localhost:18080/api/hasse -H "Content-Type: application/json" -d '{"p": "7"}'
+*/
